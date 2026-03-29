@@ -11,14 +11,25 @@ declare module "noblox.js" {
      */
     interface CookieJar {
         session?: string;
+        apiKey?: string;
     }
 
     /**
      * NobloxOptions for setOptions, based from settings.json
      */
     interface NobloxOptions {
+        /** Prints console warnings for functions that are being polyfilled by newer methods due to upstream Roblox API changes */
+        show_deprecation_warnings: boolean;
+
         /** Minimizes data usage and speed up requests by only saving session cookies, disable if you need other cookies to be saved as well. (Default: true) */
         session_only: boolean;
+
+        /**
+         * Whether to send the noblox.js library user agent. Defaults to true.
+         * When enabled, noblox will set the user-agent on requests to 'noblox@{version}' where {version} is your library version.
+         * This allows Roblox to track endpoint and library usage. If you are privacy or aggregation conscious set this to false.
+         */
+        use_noblox_ua: boolean;
 
         /** This is usually used for functions that have to receive a lot of pages at once. Only this amount will be queued up as to preserve memory, make this as high as possible for fastest responses (although it will be somewhat limited by maxSockets). (Default: 50) */
         max_threads: number;
@@ -217,21 +228,9 @@ declare module "noblox.js" {
 
     type GamePassProductInfo = Omit<ProductInfo, "ContentRatingTypeId" | "SaleAvailabilityLocations" | "SaleLocation" | "CollectibleItemId">;
 
-    interface BuyProductInfo {
-        ProductId: number;
-        Creator: { Id: number };
-        PriceInRobux: number;
-        UserAssetId: number;
-    }
-
     interface PriceRange {
         high: number;
         low: number;
-    }
-
-    interface BuyAssetResponse {
-        productId: number;
-        price: number;
     }
 
     interface ChartDataPointResponse {
@@ -580,6 +579,12 @@ declare module "noblox.js" {
     }
 
     /// Game
+    type UserNotificationPayloadParameter = { stringValue: string } | { int64Value: number };
+
+    interface UserNotificationPayloadParameters {
+        [key: string]: UserNotificationPayloadParameter
+    }
+
     interface GameInstance {
         id: string;
         maxPlayers: number;
@@ -624,20 +629,18 @@ declare module "noblox.js" {
     }
 
     interface DeveloperProductAddResult {
-        universeId: number,
+        id: number,
         name: string,
-        priceInRobux: number,
-        description?: string,
-        productId: string
+        Description: string, // API does not return camelCase
+        shopId: number,
+        iconImageAssetId: number | null
     }
 
-    interface CheckDeveloperProductNameResult {
-        Success: boolean;
-        /**
-         * When success is true: "Name available"
-         * When success is false, you can get: "Product name already exists"
-         */
-        Message: string;
+    interface DeveloperProductAddError {
+        errorCode: string,
+        errorMessage: string,
+        field: string,
+        hint: string | null
     }
 
     interface GamePassData {
@@ -736,7 +739,7 @@ declare module "noblox.js" {
         isFavoritedByUser: boolean;
         favoritedCount: number;
     }
-            
+
     interface PlaceInformation {
         placeId: number;
         name: string;
@@ -865,6 +868,12 @@ declare module "noblox.js" {
         updated: Date;
     }
 
+    interface PayoutAllowedList {
+        usersGroupPayoutEligibility: {
+            [K: string]: string;
+        }
+    }
+
     interface GroupDescriptionResult {
         newDescription: string
     }
@@ -965,6 +974,14 @@ declare module "noblox.js" {
         data: WallPost[];
     }
 
+    interface GroupBan {
+        user: UserEntry;
+        actingUser: {
+            user: UserEntry;
+        },
+        created: Date;
+    }
+
     /// Party
 
     interface PartyData {
@@ -998,10 +1015,15 @@ declare module "noblox.js" {
         UserID: number,
         UserName: string,
         RobuxBalance: number,
-        TicketsBalance: number,
         ThumbnailUrl: string,
-        IsAnyBuildersClubMember: boolean,
+        IsAnyBuildersClubMember: false,
         IsPremium: boolean
+    }
+
+    interface AuthenticatedUserData {
+        id: number;
+        name: string;
+        displayName: string;
     }
 
     interface UserLoginApiData {
@@ -1085,9 +1107,14 @@ declare module "noblox.js" {
     //
 
     interface UserEntry {
+        hasVerifiedBadge: boolean;
         userId: number;
         name: string;
         displayName: string;
+    }
+
+    interface UsernameHistoryEntry {
+        name: string;
     }
 
     interface PrivateMessageParent {
@@ -1135,9 +1162,19 @@ declare module "noblox.js" {
         friendCount?: number;
         followerCount?: number;
         followingCount?: number;
-        oldNames?: string[];
         isBanned: boolean;
     }
+
+    interface UserInfo {
+        description: string;
+        created: Date;
+        isBanned: boolean;
+        hasVerifiedBadge: boolean;
+        id: number;
+        name: string;
+        displayName: string;
+    }
+
     interface Presences {
         userPresences: UserPresence[]
     }
@@ -1154,6 +1191,14 @@ declare module "noblox.js" {
         youtube?: string;
         twitch?: string;
         guilded?: string;
+    }
+
+    interface UserSearchResult {
+        previousUsernames: string[];
+        hasVerifiedBadge: boolean;
+        id: number;
+        name: string;
+        displayName: string;
     }
 
     /// Badges
@@ -1666,16 +1711,16 @@ declare module "noblox.js" {
      * 🔐 Allows the user to login with a provided cookie string, bypassing the username/password captcha issues.
      * By default, the provided cookie will be validated by making a HTTP request. To disable this behaviour, pass false as the second optional parameter (shouldValidate).
      */
-    function setCookie<B extends boolean = true>(cookie: string, shouldValidate?: B): B extends false ? boolean : Promise<LoggedInUserData>
+    function setCookie<B extends boolean = true>(cookie: string, shouldValidate?: B): B extends false ? boolean : Promise<AuthenticatedUserData>
 
     /// DataStores
 
-    /** 
-     * ☁️ Marks the entry as deleted by creating a tombstone version. Entries are deleted permanently after 30 days. 
+    /**
+     * ☁️ Marks the entry as deleted by creating a tombstone version. Entries are deleted permanently after 30 days.
      */
     function deleteDatastoreEntry(universeId: number, datastoreName: string, entryKey: string, scope?: string, jar?: CookieJar): Promise<void>
 
-    /** 
+    /**
      * ☁️ Returns the latest value and metadata associated with an entry, or a specific version if versionId is provided.
      */
     function getDatastoreEntry(universeId: number, datastoreName: string, entryKey: string, scope?: string, versionId?: string, jar?: CookieJar): Promise<DatastoreEntry>
@@ -1732,14 +1777,14 @@ declare module "noblox.js" {
     /// Economy
 
     /**
-     * 🔐 Buys asset `asset` with `price` restrictions. This can be a single value or an object with `high` and `low` that sets the respective price limits (both inclusive). This allows you to buy assets with a minimum or maximum amount of robux that can be used or a single required value and therefore guarantees you can't be scammed by a sudden price change. If a price restriction is not set, the asset will be bought for however much it costs (works with free assets). You are able to use product instead of asset, the options in `product` are collected automatically if not provided.
-     */
-    function buy(asset: number | ProductInfo | BuyProductInfo, price?: number | PriceRange, jar?: CookieJar): Promise<BuyAssetResponse>;
-
-    /**
      * 🔓 Gets the amount of Robux in a group.
      */
     function getGroupFunds(group: number): Promise<number>;
+    
+    /**
+     * 🔐 Gets the payout eligibility status of a group member.
+     */
+    function getGroupPayoutEligibility(groupId: number, userIds: number[], jar?: CookieJar): Promise<PayoutAllowedList>;
 
     /**
      * 🔐 Gets recent Robux revenue summary for a group; shows pending Robux. | Requires "Spend group funds" permissions.
@@ -1766,6 +1811,11 @@ declare module "noblox.js" {
      */
     function getUserTransactions(transactionType?: "Sale" | "Purchase" | "AffiliateSale" | "DevEx" | "GroupPayout" | "AdImpressionPayout", limit?: number, sortOrder?: SortOrder, jar?: CookieJar): Promise<TransactionItem[]>;
 
+    /**
+     * 🔐 Returns the current user's robux balance
+     */
+    function getUserFunds(userId?: number, jar?: CookieJar): Promise<number>;
+
     /// Friends
 
     /**
@@ -1784,14 +1834,29 @@ declare module "noblox.js" {
     function declineFriendRequest(userId: number, jar?: CookieJar): Promise<void>;
 
     /**
+     * ✅ Gets the number of followers a user has.
+     */
+    function getFollowerCount(userId: number): Promise<number>;
+
+    /**
      * ✅ Get the followers of a user (users who follow the specified person)
      */
     function getFollowers(userId: number, sortOrder?: SortOrder, limit?: Limit, cursor?: string, jar?: CookieJar): Promise<FollowersPage>;
 
     /**
+     * ✅ Gets the number of followings a user has (users who have been followed by the specified person).
+     */
+    function getFollowingCount(userId: number): Promise<number>;
+
+    /**
      * ✅ Get the followings of a user (users who have been followed by the specified person)
      */
     function getFollowings(userId: number, sortOrder?: SortOrder, limit?: Limit, cursor?: string, jar?: CookieJar): Promise<FollowingsPage>;
+
+    /**
+     * ✅ Get the number of friends a user has.
+     */
+    function getFriendCount(userId: number): Promise<number>;
 
     /**
      * 🔐 Gets the pending friend requests of the logged in user.
@@ -1821,17 +1886,10 @@ declare module "noblox.js" {
     /// Games
 
     /**
-     * 🔐 Adds a developer product to the specified universe. 
+     * 🔐 Adds a developer product to the specified universe.
      * Warning: The `productId` returned by this function does not match the `productId` used by other endpoints.
      */
     function addDeveloperProduct(universeId: number, name: string, priceInRobux: number, description?: string, jar?: CookieJar): Promise<DeveloperProductAddResult>;
-
-    /**
-     * 🔐 Checks to see if the provided `produceName` is able to be used on `productId`.
-     *
-     * NOTE: You actually need a valid `productId` and `universeId` otherwise, the http request returns a `404 Not Found` response.
-     */
-    function checkDeveloperProductName(universeId: number, productName: string, jar?: CookieJar, productId?: number): Promise<CheckDeveloperProductNameResult>;
 
     /**
      * 🔐 Configures a game pass with the id `gamePassId` to have a `name`, `description`, `price` in Robux, and `icon` image. If `name` is an empty string, only `price` is changed. Setting `price` to false, 0, or a negative value will place the game pass off-sale.
@@ -1871,17 +1929,33 @@ declare module "noblox.js" {
      */
     function getUniverseInfo(universeIds: number[] | number, jar?: CookieJar): Promise<UniverseInformation[]>;
 
-    /** 
+    /**
+    * ☁️ Publish a message to a subscribed topic.
+    */
+    function publishToTopic(universeId: number, topic: string, data: (Object | string), jar?: CookieJar): Promise<boolean>;
+
+    /**
+* ☁️ Send a universe notification to a user.
+*/
+    function sendUserNotification(universeId: number, userId: number, assetId: string, parameters: UserNotificationPayloadParameters, jar?: CookieJar): Promise<boolean>;
+
+    /**
      * 🔐 Returns information about the place(s) in question, such as name, description, etc.
      */
     function getPlaceInfo(placeIds: number[] | number, jar?: CookieJar): Promise<PlaceInformation[]>;
-            
+
     /**
      * 🔐 Update a developer product.
      */
     function updateDeveloperProduct(universeId: number, productId: number, priceInRobux: number, name?: string, description?: string, jar?: CookieJar): Promise<void>;
 
     /// Groups
+
+    /**
+     * 🔐 Bans a user from the specified group.
+     */
+    function banFromGroup(groupId: number, userId: number, jar?: CookieJar): Promise<GroupBan>;
+
     /**
      * 🔐 Moves the user with userId `target` up or down the list of ranks in `group` by `change`. For example `changeRank(group, target, 1)` would promote the user 1 rank and `changeRank(group, target, -1)` would demote them down 1. Note that this simply follows the list, ignoring ambiguous ranks. The full `newRole` as well as the user's original `oldRole` is returned.
      */
@@ -1916,6 +1990,11 @@ declare module "noblox.js" {
      * ✅ Gets a brief overview of the specified group.
      */
     function getGroup(groupId: number): Promise<Group>;
+
+    /**
+     * 🔐 Gets a list of the group's bans.
+     */
+    function getGroupBans(groupId: number, limit?: number, sortOrder?: SortOrder, pageCursor?: string, jar?: CookieJar): Promise<{ previousPageCursor?: string, nextPageCursor?: string, data: GroupBan[] }>;
 
     /**
      * ✅ Gets the groups a player is in.
@@ -1992,6 +2071,11 @@ declare module "noblox.js" {
     function handleJoinRequest(group: number, userId: number, accept: boolean, jar?: CookieJar): Promise<void>;
 
     /**
+     * 🔐 Batch accept/decline multiple users' join requests.
+     */
+    function handleJoinRequests(group: number, userIds: number[], accept: boolean, jar?: CookieJar): Promise<void>;
+
+    /**
      * 🔐 Leaves the group with id `group`. Unless `useCache` is enabled the function will not cache because errors will occur if joining or leaving the same group multiple times, you can enable it if you are only joining or leaving a group once or many differenct groups once.
      */
     function leaveGroup(group: number, jar?: CookieJar): Promise<void>;
@@ -2022,9 +2106,19 @@ declare module "noblox.js" {
     function setRank(group: number, target: number, rank: number | string | Role, jar?: CookieJar): Promise<Role>;
 
     /**
+     * 🔐 Changes the rank of the player with the `target` userId in group with `groupId` to the provided rank. If rank <= 255, it is assumes to be rank. If rank is a string, it is assumed to be the name of a rank/role. If rank is > 255, it is assumed to be a rolesetId (which speeds up requests). If two or more ranks share a rank, this will not resolve properly (use the name of the rank instead). You may also pass a Role which can be gotten from `getRoles` or `getRole`.
+     */
+    function setRoleInfo(group: number, role: number | string | Role, newRoleInfo: Role, jar?: CookieJar): Promise<Role>;
+
+    /**
      * 🔐 Shouts message `message` in the group with groupId `group`. Setting `message` to "" will clear the shout.
      */
     function shout(group: number, message: string, jar?: CookieJar): Promise<GroupShout>;
+
+    /**
+     * 🔐 Unbans a user from the specified group.
+     */
+    function unbanFromGroup(groupId: number, userId: number, jar?: CookieJar): Promise<void>;
 
     /// Inventory
 
@@ -2156,9 +2250,24 @@ declare module "noblox.js" {
     function getPlayerInfo(userId: number): Promise<PlayerInfo>;
 
     /**
+     * ✅ Gets basic user information.
+     */
+    function getUserInfo(userId: number): Promise<UserInfo>;
+
+    /**
      * ✅ Gets `username` of user with `id` and caches according to settings.
      */
     function getUsernameFromId(id: number): Promise<string>;
+
+    /**
+     * ✅ Gets a list of usernames the specified user has used.
+     */
+    function getUsernameHistory(userId: number, limit?: Limit, sortOrder?: SortOrder, cursor?: string): Promise<UsernameHistoryEntry[]>;
+
+    /**
+     * ✅ Gets user search results for a keyword.
+     */
+    function searchUsers(keyword: string, limit: number, cursor: string, jar?: CookieJar): Promise<UserSearchResult[]>;
 
     /// Utility
 
@@ -2176,6 +2285,11 @@ declare module "noblox.js" {
      * ✅ Gets the action row for audit log text. Current supported types are: change rank, delete post, and change group status (shouts).
      */
     function getAction(row: string): AuditItem;
+
+    /**
+     * 🔐 Get the current authenticated user.
+     */
+    function getAuthenticatedUser(jar?: CookieJar): Promise<AuthenticatedUserData>
 
     /**
      * 🔐 Gets the current user logged into `jar` and returns an `option` if specified or all options if not.
@@ -2295,7 +2409,7 @@ declare module "noblox.js" {
      * @param newOptions - The new options to set, structured as per settings.json
      * @see https://github.com/noblox/noblox.js/blob/master/settings.json
      */
-    function setOptions(newOptions: NobloxOptions): void
+    function setOptions(newOptions: Partial<NobloxOptions>): void
 
     // Events
 

@@ -1,4 +1,4 @@
-const { changeRank, demote, getAuditLog, getGroup, getGroups, getGroupSocialLinks, getJoinRequests, getPlayers, getRankInGroup, getRankNameInGroup, getRole, getRolePermissions, getRoles, getShout, getWall, promote, searchGroups, setRank, shout, setCookie } = require('../lib')
+const { banFromGroup, changeRank, demote, getAuditLog, getGroup, getGroupBans, getGroups, getGroupSocialLinks, getJoinRequests, getPlayers, getRankInGroup, getRankNameInGroup, getRole, getRolePermissions, getRoles, getShout, getWall, promote, searchGroups, setRank, shout, setCookie, unbanFromGroup } = require('../lib')
 
 beforeAll(() => {
   return new Promise(resolve => {
@@ -258,6 +258,8 @@ describe('Groups Methods', () => {
 
   // PASS: handleJoinRequest, would require being able to request to join a group
 
+  // PASS: handleJoinRequests, would require being able to request to join a group
+
   // PASS: leaveGroup, would require being able to request to join a group
 
   it('searchGroups() returns groups that match the query', () => {
@@ -308,4 +310,96 @@ describe('Groups Methods', () => {
       })
     })
   })
+
+  it('banFromGroup() should ban a user from the specified group', () => {
+    return banFromGroup(4591072, 1).then((res) => {
+      return expect(res).toMatchObject({
+        user: {
+          hasVerifiedBadge: expect.any(Boolean),
+          userId: expect.any(Number),
+          username: expect.any(String),
+          displayName: expect.any(String)
+        },
+        actingUser: {
+          user: {
+            hasVerifiedBadge: expect.any(Boolean),
+            userId: expect.any(Number),
+            username: expect.any(String),
+            displayName: expect.any(String)
+          },
+          role: {
+            id: expect.any(Number),
+            name: expect.any(String),
+            rank: expect.any(Number)
+          }
+        },
+        created: expect.any(Date)
+      })
+    })
+  })
+
+  it('getGroupBans() should retrieve a page of group bans', () => {
+    return getGroupBans(4591072, 10, 'Asc').then((res) => {
+      return expect(res).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            user: {
+              hasVerifiedBadge: expect.any(Boolean),
+              userId: expect.any(Number),
+              username: expect.any(String),
+              displayName: expect.any(String)
+            },
+            actingUser: {
+              user: {
+                hasVerifiedBadge: expect.any(Boolean),
+                userId: expect.any(Number),
+                username: expect.any(String),
+                displayName: expect.any(String)
+              },
+              role: {
+                id: expect.any(Number),
+                name: expect.any(String),
+                rank: expect.any(Number)
+              }
+            },
+            created: expect.any(Date)
+          })
+        ])
+      )
+    })
+  })
+
+  it('unbanFromGroup() should unban a user from a group', async () => {
+    await expect(unbanFromGroup(4591072, 1)).resolves.not.toThrow()
+  })
 })
+
+it('setRank() should set a player\'s rank to the specified rank', () => {
+  return changeRank(4591072, 857710783, 2).then(() => {
+    return setRank(4591072, 857710783, 1).then((res) => {
+      return expect(res).toMatchObject({
+        name: expect.any(String),
+        rank: expect.any(Number),
+        memberCount: expect.any(Number),
+        ID: expect.any(Number)
+      })
+    })
+  })
+})
+
+
+// PASS: setRoleInfo -- skip this, do not own group
+
+// it('setRoleInfo() should update a role\'s information', () => {
+//   return getRole(4591072, 1).then((originalRoleInfo) => {
+//     return setRoleInfo(4591072, 1, { name: 'Programmer', description: 'Programs on roblox n stuff', rank: 2 }).then((res) => {
+//       return setRoleInfo(4591072, "Programmer", originalRoleInfo).then(() => {
+//         return expect(res).toMatchObject({
+//           name: expect.any(String),
+//           rank: expect.any(Number),
+//           description: expect.any(String)
+//         })
+//       })
+//     })
+//   })
+// })
